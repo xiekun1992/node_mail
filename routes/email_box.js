@@ -18,37 +18,67 @@ const imap = new Imap({
 /**
  * list all mailboxes
  */
-router.get('/', (req, res) => {
-  imap.once('ready', () => {
-    imap.getBoxes((err, boxes) => {
-      if (err) {
-        res.statusCode = 500;
-        res.json({
-          msg: err.message
-        });
-        imap.end();
-      } else {
-        res.json({
-          msg: recurseBox(boxes)
-        });
-        imap.end();
-      }
+router.get('/', (req, res, next) => {
+  if (req.query.mailbox) {
+    next();
+  } else {
+    imap.once('ready', () => {
+      imap.getBoxes((err, boxes) => {
+        if (err) {
+          res.statusCode = 500;
+          res.json({
+            msg: err.message
+          });
+          imap.end();
+        } else {
+          res.json({
+            msg: recurseBox(boxes)
+          });
+          imap.end();
+        }
+      });
     });
-  });
-  imap.once('error', err => {
-    res.statusCode = 500;
-    res.json({
-      msg: err.message
+    imap.once('error', err => {
+      res.statusCode = 500;
+      res.json({
+        msg: err.message
+      });
     });
-  });
-  imap.connect();
+    imap.connect();
+  }
 });
 /**
  * get mailbox detail
- * params: mailbox
+ * query: ?mailbox=path/to/mailbox
  */
-router.get('/:mailbox', (req, res) => {
-
+router.get('/', (req, res) => {
+  const mailbox = req.query.mailbox;
+  if (mailbox) {
+    imap.once('ready', () => {
+      imap.status(mailbox, (err, box) => {
+        if (err) {
+          res.statusCode = 500;
+          res.json({
+            msg: err.message
+          });
+          imap.end();
+        } else {
+          res.json({msg: box});
+          imap.end();
+        }
+      });
+    });
+    imap.once('error', err => {
+      res.statusCode = 500;
+      res.json({msg: err.message});
+    });
+    imap.connect();
+  } else {
+    res.statusCode = 400;
+    res.json({
+      msg: 'mailbox should not be empty'
+    });
+  }
 });
 /**
  * create mailbox
