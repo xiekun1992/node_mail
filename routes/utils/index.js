@@ -8,6 +8,7 @@ let recurseBox = function (box) {
     if (box.hasOwnProperty(e)) {
       let obj = {};
       obj.name = e;
+      obj.delimiter = box[e].delimiter;
       if (box[e].children) {
         obj.children = recurseBox(box[e].children);
       }
