@@ -26,10 +26,12 @@ router.get('/', (req, res) => {
         res.json({
           msg: err.message
         });
+        imap.end();
       } else {
         res.json({
           msg: recurseBox(boxes)
         });
+        imap.end();
       }
     });
   });
@@ -46,7 +48,7 @@ router.get('/', (req, res) => {
  * params: mailbox
  */
 router.get('/:mailbox', (req, res) => {
-  
+
 });
 /**
  * create mailbox
@@ -62,9 +64,11 @@ router.post('/', (req, res) => {
           res.json({
             msg: err.message
           });
+          imap.end();
         } else {
           res.statusCode = 201;
           res.end();
+          imap.end();
         }
       });
     });
@@ -96,8 +100,10 @@ router.put('/', (req, res) => {
         if (err) {
           res.statusCode = 500;
           res.json({msg: err.message});
+          imap.end();
         } else {
-          res.json({msg: box});
+          res.end();
+          imap.end();
         }
       });
     });
@@ -127,8 +133,10 @@ router.delete('/', (req, res) => {
         if (err) {
           res.statusCode = 500;
           res.json({msg: err.message});
+          imap.end();
         } else {
           res.end();
+          imap.end();
         }
       });
     });
