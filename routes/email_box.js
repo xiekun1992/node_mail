@@ -15,6 +15,9 @@ const imap = new Imap({
   tls: true
 });
 
+/**
+ * list all mailboxes
+ */
 router.get('/', (req, res) => {
   imap.once('ready', () => {
     imap.getBoxes((err, boxes) => {
@@ -38,13 +41,20 @@ router.get('/', (req, res) => {
   });
   imap.connect();
 });
-router.get('/:id', (req, res) => {
-
+/**
+ * get mailbox detail
+ * params: mailbox
+ */
+router.get('/:mailbox', (req, res) => {
+  
 });
+/**
+ * create mailbox
+ * body: {path: path/to/mailbox}
+ */
 router.post('/', (req, res) => {
-  const { mailboxParentName, mailboxName } = req.body;
-  if (mailboxName) {
-    let path = resolvePath(mailboxParentName, mailboxName);
+  const { path } = req.body;
+  if (path) {
     imap.once('ready', () => {
       imap.addBox(path, err => {
         if (err) {
@@ -72,22 +82,46 @@ router.post('/', (req, res) => {
     });
   }
 });
-router.put('/:id', (req, res) => {
-  // imap.once('ready', () => {
-  //   imap.renameBox(oldMailboxName, newMailboxName, (err, box) => {
-  //     if (err) {
-  //       res.statusCode = 500;
-  //       res.json({msg: err.message});
-  //     } else {
-  //       res.json();
-  //     }
-  //   });
-  // });
+/**
+ * rename mailbox
+ * query: ?oldMailboxName=path/to/old
+ * body: {newMailboxName: 'path/to/new'}
+ */
+router.put('/', (req, res) => {
+  const oldMailboxName = req.query.oldMailboxName;
+  const newMailboxName = req.body.newMailboxName;
+  if (oldMailboxName && newMailboxName) {
+    imap.once('ready', () => {
+      imap.renameBox(oldMailboxName, newMailboxName, (err, box) => {
+        if (err) {
+          res.statusCode = 500;
+          res.json({msg: err.message});
+        } else {
+          res.json({msg: box});
+        }
+      });
+    });
+    imap.once('error', err => {
+      res.statusCode = 500;
+      res.json({
+        msg: err.message
+      });
+    });
+    imap.connect();
+  } else {
+    res.statusCode = 400;
+    res.json({
+      msg: 'both oldMailboxName and newMailboxName should not be empty'
+    });
+  }
 });
+/**
+ * delete mailbox
+ * query: ?path=path/to/mailbox
+ */
 router.delete('/', (req, res) => {
-  const { mailboxParentName, mailboxName } = req.query;
-  if (mailboxName) {
-    let path = resolvePath(mailboxParentName, mailboxName);
+  const { path } = req.query;
+  if (path) {
     imap.once('ready', () => {
       imap.delBox(path, (err, box) => {
         if (err) {
