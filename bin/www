@@ -6,7 +6,11 @@
 
 var app = require('../app');
 var debug = require('debug')('node-mail:server');
-var http = require('http');
+var https = require('https');
+var fs = require('fs');
+var path = require('path');
+
+// var WebSocketServer = require('websocket').server;
 
 /**
  * Get port from environment and store in Express.
@@ -19,7 +23,18 @@ app.set('port', port);
  * Create HTTP server.
  */
 
-var server = http.createServer(app);
+var server = https.createServer({
+  key: fs.readFileSync(path.resolve(__dirname, '../key.pem')),
+  cert: fs.readFileSync(path.resolve(__dirname, '../cert.pem')),
+  passphrase: Buffer.from("eGlla3VuNDU1OTYxMDMwMA==", 'base64').toString()
+}, app);
+/**
+ * Create WS server.
+ */
+// var wss = new WebSocketServer({
+//   httpServer: server,
+//   // autoAcceptConnections: false
+// });
 
 /**
  * Listen on provided port, on all network interfaces.
@@ -29,6 +44,31 @@ server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
 
+// wss.on('request', function (req) {
+//   if (!originIsAllowed(req.origin)) {
+//     req.reject();
+//     console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
+//     return;
+//   }
+//   let connection = req.accept('echo-protocol', req.origin);
+//   console.log((new Date()) + ' Connection accepted.');
+//   connection.on('message', message => {
+//     if (message.type === 'utf8') {
+//       console.log('Received Message: ' + message.utf8Data);
+//       connection.sendUTF(message.utf8Data);
+//     }
+//     else if (message.type === 'binary') {
+//       console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
+//       connection.sendBytes(message.binaryData);
+//     }
+//   });
+//   connection.on('close', (reasonCode, description) => {
+//     console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
+//   });
+// });
+// function originIsAllowed (origin) {
+//   return true;
+// }
 /**
  * Normalize a port into a number, string, or false.
  */
