@@ -118,7 +118,7 @@ router.get('/', function (req, res, next) {
                 msg.once('attributes', attrs => {
                   let attr = inspect(attrs, false, 8);
                   console.log(prefix + 'Attributes: %s', attr);
-                  emailEnvolope.uid = attr.uid;
+                  emailEnvolope.uid = attrs.uid;
                 });
                 msg.once('end', () => {
                   console.log(prefix, 'Finished');
