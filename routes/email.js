@@ -43,7 +43,9 @@ let transporter = nodemailer.createTransport({
  */
 router.get('/', function (req, res, next) {
   const mailbox = req.query.mailbox;
-  if (mailbox) {
+  const flags = req.query.flags;
+  const queries = req.query.queries.split('|').map(q => q.split(','));
+  if (mailbox && flags) {
     imap.once('ready', () => {
       imap.openBox(mailbox, true, (err, box) => {
         if (err) {
@@ -51,7 +53,7 @@ router.get('/', function (req, res, next) {
           res.json({msg: err.message});
           imap.end();
         } else {
-          imap.search(['All', ['SINCE', new Date('2018-011-01')]], (err, results) => {
+          imap.search([flags, ...queries], (err, results) => {
             if (err) {
               res.statusCode = 500;
               res.json({msg: err.message});
@@ -63,6 +65,8 @@ router.get('/', function (req, res, next) {
               f.on('message', (msg, seqno) => {
                 console.log('Message #%d', seqno);
                 let prefix = `(#${seqno}) `;
+                const emailEnvolope = {};
+
                 msg.on('body', (stream, info) => {
                   let promise = (function () {
                     return new Promise((resolve, reject) => {
@@ -75,7 +79,7 @@ router.get('/', function (req, res, next) {
                         // mail will have everything, create meaningful data from it.
                         // const fileName = `msg-${seqno}-body.txt`;
                         // const fullFilePath = path.join('<path to store>', dir, fileName);
-                        const emailEnvolope = {};
+                        emailEnvolope.seq = seqno;
                         emailEnvolope.from = mail.from.text;
                         emailEnvolope.date = mail.date;
                         emailEnvolope.to = mail.to.text;
@@ -90,12 +94,12 @@ router.get('/', function (req, res, next) {
                           emailEnvolope.overview = mail.text && mail.text.replace(/(\[(https|http):\/\/[\s\S]+?\])*/g, '').replace(/[\s]+/g, ' ');  
                         }
                         emailEnvolope.overview = emailEnvolope.overview.trim().replace(/(\s)+/g, ' ').slice(0, 50);
-    
+                        
                         // write attachments
                         for (let i = 0; i < mail.attachments.length; i += 1) {
-                            const attachment = mail.attachments[i];
-                            const { filename } = attachment;
-                            emailEnvolope.attachments.push(filename);
+                          const attachment = mail.attachments[i];
+                          const { filename } = attachment;
+                          emailEnvolope.attachments.push(filename);
                           //  fs.writeFileSync(path.join('<path to store>', dir, filename), attachment.content, 'base64'); // take encoding from attachment ?
                         }
                         // const contents = JSON.stringify(emailEnvolope);
@@ -112,11 +116,12 @@ router.get('/', function (req, res, next) {
                   promises.push(promise);
                 });
                 msg.once('attributes', attrs => {
-                  console.log(prefix + 'Attributes: %s', inspect(attrs, false, 8));
+                  let attr = inspect(attrs, false, 8);
+                  console.log(prefix + 'Attributes: %s', attr);
+                  emailEnvolope.uid = attr.uid;
                 });
                 msg.once('end', () => {
                   console.log(prefix, 'Finished');
-                  
                 });
               });
               f.once('error', err => {
@@ -126,8 +131,15 @@ router.get('/', function (req, res, next) {
               });
               f.once('end', () => {
                 console.log('Done fetching all messages!');
-                Promise.all(promises).then(() => {
-                  res.json({msg: msgs});
+                Promise.race([Promise.all(promises), new Promise(resolve => {
+                  let timer = setTimeout(() => {
+                    resolve();
+                    clearTimeout(timer);
+                  }, 30 * 1000);
+                })]).then(() => {
+                  res.json({msg: msgs.sort((a, b) => {
+                    return a.seq < b.seq;
+                  })});
                 });
                 imap.end();
               });
