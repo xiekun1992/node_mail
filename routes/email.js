@@ -19,14 +19,6 @@ const imap = new Imap({
   port: 993,
   tls: true
 });
-// send
-let transporter = nodemailer.createTransport({
-  pool: true,
-  host: 'smtp-mail.outlook.com',
-  port: 587,
-  secure: false,
-  auth: config
-});
 // imap.once('ready', function() {
 //   imap.on('mail', function(numNewMsgs) {
 //     console.log('new msgs arrived: ', numNewMsgs);
@@ -245,15 +237,24 @@ router.post('/', function (req, res, next) {
       text, // plain text body
       html // html body
     };
+    // send
+    let transporter = nodemailer.createTransport({
+      pool: true,
+      host: 'smtp-mail.outlook.com',
+      port: 587,
+      secure: false,
+      auth: config
+    });
     transporter.sendMail(mailOptions, (err, info) => {
       if (err) {
-        res.json({name: 'fail'});
+        res.json({msg: err.message});
         return console.log(err);
       }
       console.log('Message sent: %s', info.messageId);
       // Preview only available when sending through an Ethereal account
       console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
-      res.json({name: 'ok', accepted: info.accepted, rejected: info.rejected});
+      res.statusCode = 201;
+      res.end();
     });
   }
   // transporter.verify(function (error, success) {
