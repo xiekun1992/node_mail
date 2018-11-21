@@ -15,6 +15,38 @@ const imap = new Imap({
   tls: true
 });
 
+// imap.once('ready', () => {
+//   imap.openBox('Junk', true, (err, boxes) => {
+//     console.log(err, boxes);
+//     imap.on('mail', function(numNewMsgs) {
+//       console.log('mail', numNewMsgs);
+//     });
+//     imap.on('update', function(seqno, info) {
+//       console.log('update', seqno, info);
+//     });
+//     imap.on('expunge', function(seqno) {
+//       console.log('expunge', seqno);
+//     });
+//     imap.on('uidvalidity', function(uidvalidity) {
+//       console.log('uidvalidity', uidvalidity);
+//     });
+//   });
+// });
+// imap.on('alert', function(message) {
+//   console.log('alert', message);
+// });
+// imap.on('close', function(hadError) {
+//   console.log('close', hadError);
+// });
+// imap.on('end', function() {
+//   console.log('end');
+// });
+// imap.on('error', function(err) {
+//   console.log('error', err);
+// });
+// imap.connect();
+
+
 /**
  * list all mailboxes
  */

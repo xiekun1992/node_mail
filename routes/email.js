@@ -51,6 +51,11 @@ router.get('/:uid', function (req, res, next) {
               res.json({msg: err.message});
               imap.end();
             } else {
+              if (uids.length == 0) {
+                res.json({msg: null});
+                imap.end();
+                return;
+              }
               let f = imap.fetch(uids, {bodies: ''});
               let promise;
               f.on('message', (msg, seqno) => {
@@ -157,6 +162,11 @@ router.get('/', function (req, res, next) {
               res.json({msg: err.message});
               imap.end();
             } else {
+              if (results.length == 0) {
+                res.json({msg: null});
+                imap.end();
+                return;
+              }
               let f = imap.fetch(results, {bodies: ''});
               let msgs = [];
               let promises = [];
@@ -258,7 +268,7 @@ router.get('/', function (req, res, next) {
 });
 
 router.post('/', function (req, res, next) {
-  let { from, to, cc, bcc, subject, text, html } = req.body;
+  let { from, to, cc, bcc, subject, text, html, attachments } = req.body;
   if (from && to) {
     let mailOptions = {
       from, // sender address
@@ -267,7 +277,8 @@ router.post('/', function (req, res, next) {
       bcc,
       subject, // Subject line
       text, // plain text body
-      html // html body
+      html, // html body
+      attachments
     };
     // send
     let transporter = nodemailer.createTransport({
