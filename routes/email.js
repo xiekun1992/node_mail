@@ -21,15 +21,6 @@ const imap = new Imap({
   port: 993,
   tls: true
 });
-// imap.once('ready', function() {
-//   imap.on('mail', function(numNewMsgs) {
-//     console.log('new msgs arrived: ', numNewMsgs);
-//   });
-//   imap.getBoxes(function(err, boxes) {
-//     console.log(boxes);
-//   });
-// });
-// imap.connect();
 
 router.get('/:uid', function (req, res, next) {
   const uid = req.params.uid;
@@ -321,8 +312,40 @@ router.post('/', function (req, res, next) {
 router.put('/', function (req, res, next) {
 
 });
-router.delete('/', function (req, res, next) {
-
+router.delete('/:uid', function (req, res, next) {
+  let uid = req.params.uid;
+  let mailbox = req.query.mailbox;
+  if (uid && mailbox) {
+    uid = parseInt(uid);
+    imap.once('ready', () => {
+      imap.openBox(mailbox, false, (err, box) => {
+        if (err) {
+          res.statusCode = 500;
+          res.json({msg: err.message});
+          return ;
+        }
+        imap.move([uid], 'Deleted', err => {
+          if (err) {
+            res.statusCode = 500;
+            res.json({msg: err.message});
+            return ;
+          }
+          res.statusCode = 201;
+          res.end();
+        });
+      });
+    });
+    imap.once('error', err => {
+      res.statusCode = 500;
+      res.json({msg: err.message});
+    });
+    imap.connect();
+  } else {
+    res.statusCode = 400;
+    res.json({
+      msg: 'uid should not be empty'
+    });
+  }
 });
 
 module.exports = router;
