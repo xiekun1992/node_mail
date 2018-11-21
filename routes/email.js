@@ -11,6 +11,8 @@ const { simpleParser } = require('mailparser');
 
 const cheerio = require('cheerio');
 
+const store = require('../utils/storage_job').getInstance();
+
 // receive
 const imap = new Imap({
   user: config.user,
@@ -87,8 +89,13 @@ router.get('/:uid', function (req, res, next) {
                         // write attachments
                         for (let i = 0; i < mail.attachments.length; i += 1) {
                           const attachment = mail.attachments[i];
-                          const { filename } = attachment;
-                          emailEnvolope.attachments.push(filename);
+                          const { filename, size, contentType, checksum, content: buffer } = attachment;
+                          let fileRef = store.add({
+                            filename, buffer, contentType, checksum
+                          });
+                          emailEnvolope.attachments.push({
+                            filename, size, contentType, fileRef
+                          });
                           //  fs.writeFileSync(path.join('<path to store>', dir, filename), attachment.content, 'base64'); // take encoding from attachment ?
                         }
                         // const contents = JSON.stringify(emailEnvolope);
@@ -206,8 +213,10 @@ router.get('/', function (req, res, next) {
                         // write attachments
                         for (let i = 0; i < mail.attachments.length; i += 1) {
                           const attachment = mail.attachments[i];
-                          const { filename } = attachment;
-                          emailEnvolope.attachments.push(filename);
+                          const { filename, size, contentType } = attachment;
+                          emailEnvolope.attachments.push({
+                            filename, size, contentType
+                          });
                           //  fs.writeFileSync(path.join('<path to store>', dir, filename), attachment.content, 'base64'); // take encoding from attachment ?
                         }
                         // const contents = JSON.stringify(emailEnvolope);
