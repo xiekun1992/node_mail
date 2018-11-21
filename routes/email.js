@@ -29,6 +29,112 @@ const imap = new Imap({
 // });
 // imap.connect();
 
+router.get('/:uid', function (req, res, next) {
+  const uid = req.params.uid;
+  const mailbox = req.query.mailbox;
+  if (uid) {
+    if (!mailbox) {
+      res.statusCode = 400;
+      res.json('both uid and mailbox should not be empty');
+      return ;
+    }
+    imap.once('ready', () => {
+      imap.openBox(mailbox, true, (err, box) => {
+        if (err) {
+          res.statusCode = 500;
+          res.json({msg: err.message});
+          imap.end();
+        } else {
+          imap.search(['All', ['UID', `${uid}:${uid}`]], (err, uids) => {
+            if (err) {
+              res.statusCode = 500;
+              res.json({msg: err.message});
+              imap.end();
+            } else {
+              let f = imap.fetch(uids, {bodies: ''});
+              let promise;
+              f.on('message', (msg, seqno) => {
+                console.log('Message #%d', seqno);
+                let prefix = `(#${seqno}) `;
+                const emailEnvolope = {};
+
+                msg.on('body', (stream, info) => {
+                  promise = (function () {
+                    return new Promise((resolve, reject) => {
+                      simpleParser(stream, (err2, mail) => {
+                        if (err2) {
+                          console.log('Read mail executor error .....', err2);
+                          reject();
+                          return ;
+                        }
+                        // mail will have everything, create meaningful data from it.
+                        // const fileName = `msg-${seqno}-body.txt`;
+                        // const fullFilePath = path.join('<path to store>', dir, fileName);
+                        emailEnvolope.seq = seqno;
+                        emailEnvolope.from = mail.from.text;
+                        emailEnvolope.date = mail.date;
+                        emailEnvolope.to = mail.to.text;
+                        emailEnvolope.subject = mail.subject;
+                        emailEnvolope.text = mail.text;
+                        emailEnvolope.html = mail.html;
+                        emailEnvolope.attachments = [];
+                        
+                        // write attachments
+                        for (let i = 0; i < mail.attachments.length; i += 1) {
+                          const attachment = mail.attachments[i];
+                          const { filename } = attachment;
+                          emailEnvolope.attachments.push(filename);
+                          //  fs.writeFileSync(path.join('<path to store>', dir, filename), attachment.content, 'base64'); // take encoding from attachment ?
+                        }
+                        // const contents = JSON.stringify(emailEnvolope);
+                        // fs.writeFileSync(fullFilePath, contents);
+                        resolve(emailEnvolope);
+                        console.log('processing mail done....');
+                      });
+                      
+                    });
+                  })();
+                });
+                msg.once('attributes', attrs => {
+                  let attr = inspect(attrs, false, 8);
+                  console.log(prefix + 'Attributes: %s', attr);
+                  emailEnvolope.uid = attrs.uid;
+                });
+                msg.once('end', () => {
+                  console.log(prefix, 'Finished');
+                });
+              });
+              f.once('error', err => {
+                console.log('Fetch error: ' + err);
+                res.statusCode = 500;
+                res.json({msg: err.message});
+              });
+              f.once('end', () => {
+                console.log('Done fetching all messages!');
+                Promise.race([promise, new Promise(resolve => {
+                  let timer = setTimeout(() => {
+                    resolve();
+                    clearTimeout(timer);
+                  }, 30 * 1000);
+                })]).then((msg) => {
+                  res.json({msg});
+                });
+                imap.end();
+              });
+            }
+          });
+        }
+      });
+    });
+    imap.once('error', err => {
+      res.statusCode = 500;
+      res.json({msg: err.message});
+    });
+    imap.connect();
+  } else {
+    next();
+  }
+});
 /**
  * query mail in specific mailbox
  * query: ?mailbox=mailbox
@@ -149,82 +255,8 @@ router.get('/', function (req, res, next) {
     res.statusCode = 400;
     res.json({msg: 'mailbox should not be empty'});
   }
-  // imap.once('ready', function () {
-  //   imap.openBox('INBOX', true, function (err, box) {
-  //     if (err) throw err;
-  //     // imap.search([ 'UNSEEN', ['SINCE', 'September 1, 2018'] ], function(err, results) {
-  //     //   if (err) throw err;
-  //     //   var f = imap.fetch(results, { bodies: '' });
-  //     //   f.on('message', function(msg, seqno) {
-  //     //     console.log('Message #%d', seqno);
-  //     //     var prefix = '(#' + seqno + ') ';
-  //     //     msg.on('body', function(stream, info) {
-  //     //       console.log(prefix + 'Body');
-  //     //       stream.pipe(fs.createWriteStream('msg-' + seqno + '-body.txt'));
-  //     //     });
-  //     //     msg.once('attributes', function(attrs) {
-  //     //       console.log(prefix + 'Attributes: %s', inspect(attrs, false, 8));
-  //     //     });
-  //     //     msg.once('end', function() {
-  //     //       console.log(prefix + 'Finished');
-  //     //     });
-  //     //   });
-  //     //   f.once('error', function(err) {
-  //     //     console.log('Fetch error: ' + err);
-  //     //   });
-  //     //   f.once('end', function() {
-  //     //     console.log('Done fetching all messages!');
-  //     //     imap.end();
-  //     //   });
-  //     // });
-
-  //     var f = imap.seq.fetch('1:3', {
-  //       bodies: 'HEADER.FIELDS (FROM TO SUBJECT DATE)',
-  //       struct: true
-  //     });
-  //     f.on('message', function(msg, seqno) {
-  //       console.log('Message #%d', seqno);
-  //       var prefix = '(#' + seqno + ') ';
-  //       msg.on('body', function(stream, info) {
-  //         var buffer = '';
-  //         stream.on('data', function(chunk) {
-  //           buffer += chunk.toString('utf8');
-  //         });
-  //         stream.once('end', function() {
-  //           console.log(prefix + 'Parsed header: %s', inspect(Imap.parseHeader(buffer)));
-  //         });
-  //       });
-  //       msg.once('attributes', function(attrs) {
-  //         console.log(prefix + 'Attributes: %s', inspect(attrs, false, 8));
-  //       });
-  //       msg.once('end', function() {
-  //         console.log(prefix + 'Finished');
-  //       });
-  //     });
-  //     f.once('error', function(err) {
-  //       console.log('Fetch error: ' + err);
-  //       res.json({name: 'fail'});
-  //     });
-  //     f.once('end', function() {
-  //       console.log('Done fetching all messages!');
-  //       imap.end();
-  //     });
-  //   });
-
-  // });
-  // imap.once('error', function (err) {
-  //   console.log(err);
-  //   res.json({name: 'fail'});
-  // });
-  // imap.once('end', function () {
-  //   console.log('connection ended');
-  //   res.json({name: 'ok'});
-  // });
-  // imap.connect();
 });
-router.get('/:id', function (req, res, next) {
-  
-});
+
 router.post('/', function (req, res, next) {
   let { from, to, cc, bcc, subject, text, html } = req.body;
   if (from && to) {
@@ -247,12 +279,10 @@ router.post('/', function (req, res, next) {
     });
     transporter.sendMail(mailOptions, (err, info) => {
       if (err) {
+        res.statusCode = 500;
         res.json({msg: err.message});
-        return console.log(err);
+        return ;
       }
-      console.log('Message sent: %s', info.messageId);
-      // Preview only available when sending through an Ethereal account
-      console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
       res.statusCode = 201;
       res.end();
     });
