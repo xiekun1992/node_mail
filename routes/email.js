@@ -12,6 +12,7 @@ const { simpleParser } = require('mailparser');
 const cheerio = require('cheerio');
 
 const store = require('../utils/storage_job').getInstance();
+const { hasAttachments, combineMailbox } = require('./utils');
 
 // receive
 const imap = new Imap({
@@ -49,7 +50,9 @@ router.get('/:uid', function (req, res, next) {
                 imap.end();
                 return;
               }
-              let f = imap.fetch(uids, {bodies: ''});
+              let f = imap.fetch(uids, {
+                bodies: ''
+              });
               let promise;
               f.on('message', (msg, seqno) => {
                 console.log('Message #%d', seqno);
@@ -165,67 +168,77 @@ router.get('/', function (req, res, next) {
                 imap.end();
                 return;
               }
-              let f = imap.fetch(results, {bodies: ''});
+              let f = imap.fetch(results, {
+                struct: true, 
+                envelope: true,
+                // bodies: ['HEADER']
+              });
               let msgs = [];
               let promises = [];
               f.on('message', (msg, seqno) => {
                 console.log('Message #%d', seqno);
                 let prefix = `(#${seqno}) `;
                 const emailEnvolope = {};
+                emailEnvolope.seq = seqno;
+                msgs.push(emailEnvolope);
 
-                msg.on('body', (stream, info) => {
-                  let promise = (function () {
-                    return new Promise((resolve, reject) => {
-                      simpleParser(stream, (err2, mail) => {
-                        if (err2) {
-                          console.log('Read mail executor error .....', err2);
-                          reject();
-                          return ;
-                        }
-                        // mail will have everything, create meaningful data from it.
-                        // const fileName = `msg-${seqno}-body.txt`;
-                        // const fullFilePath = path.join('<path to store>', dir, fileName);
-                        emailEnvolope.seq = seqno;
-                        emailEnvolope.from = mail.from.text;
-                        emailEnvolope.date = mail.date;
-                        emailEnvolope.to = mail.to.text;
-                        emailEnvolope.subject = mail.subject;
-                        // emailEnvolope.text = mail.text && mail.text.replace(/(\[(https|http):\/\/[\s\S]+?\])*/g, '').replace(/[\s]+/g, ' ').trim().slice(0, 30).replace(/(\n)+/g, ' ');
-                        // emailEnvolope.html = mail.html;
-                        emailEnvolope.attachments = [];
-                        if (mail.html) {
-                          let $ = cheerio.load(mail.html);
-                          emailEnvolope.overview = $.text();
-                        } else {
-                          emailEnvolope.overview = mail.text && mail.text.replace(/(\[(https|http):\/\/[\s\S]+?\])*/g, '').replace(/[\s]+/g, ' ');  
-                        }
-                        emailEnvolope.overview = emailEnvolope.overview.trim().replace(/(\s)+/g, ' ').slice(0, 50);
-                        
-                        // write attachments
-                        for (let i = 0; i < mail.attachments.length; i += 1) {
-                          const attachment = mail.attachments[i];
-                          const { filename, size, contentType } = attachment;
-                          emailEnvolope.attachments.push({
-                            filename, size, contentType
-                          });
-                          //  fs.writeFileSync(path.join('<path to store>', dir, filename), attachment.content, 'base64'); // take encoding from attachment ?
-                        }
-                        // const contents = JSON.stringify(emailEnvolope);
-                        // fs.writeFileSync(fullFilePath, contents);
-                        // body = contents;
-                        // console.log(body);
-                        msgs.push(emailEnvolope);
-                        resolve();
-                        console.log('processing mail done....');
-                      });
+                // msg.on('body', (stream, info) => {
+                  // let promise = (function () {
+                  //   return new Promise((resolve, reject) => {
+                  //     let body = '';
+                  //     stream.on('data', chunk => {
+                  //       body += chunk;
+                  //     });
+                  //     stream.on('end', () => {
+                  //       console.log(body);
+                  //       resolve();
+                  //     });
+                  //   });
+                  // })();
+                  // let promise = (function () {
+                  //   return new Promise((resolve, reject) => {
+                  //     simpleParser(stream, (err2, mail) => {
+                  //       if (err2) {
+                  //         console.log('Read mail executor error .....', err2);
+                  //         reject();
+                  //         return ;
+                  //       }
+                  //       // emailEnvolope.seq = seqno;
+                  //       // emailEnvolope.from = mail.from.text;
+                  //       // emailEnvolope.date = mail.date;
+                  //       // emailEnvolope.to = mail.to.text;
+                  //       // emailEnvolope.subject = mail.subject;
+                  //       // emailEnvolope.attachments = [];
+                  //       // if (mail.html) {
+                  //       //   let $ = cheerio.load(mail.html);
+                  //       //   emailEnvolope.overview = $.text();
+                  //       // } else {
+                  //       //   emailEnvolope.overview = mail.text && mail.text.replace(/(\[(https|http):\/\/[\s\S]+?\])*/g, '').replace(/[\s]+/g, ' ');  
+                  //       // }
+                  //       // if (emailEnvolope.overview) {
+                  //       //   emailEnvolope.overview = emailEnvolope.overview.trim().replace(/(\s)+/g, ' ').slice(0, 50);
+                  //       // } else {
+                  //       //   emailEnvolope.overview = '';
+                  //       // }
+                  //       // msgs.push(emailEnvolope);
+                  //       resolve();
+                  //       console.log('processing mail done....');
+                  //     });
                       
-                    });
-                  })();
-                  promises.push(promise);
-                });
+                  //   });
+                  // })();
+                //   promises.push(promise);
+                // });
                 msg.once('attributes', attrs => {
                   let attr = inspect(attrs, false, 8);
                   console.log(prefix + 'Attributes: %s', attr);
+                  emailEnvolope.hasAttachments = hasAttachments(attrs.struct);
+                  emailEnvolope.from = combineMailbox(attrs.envelope.from);
+                  emailEnvolope.date = attrs.envelope.date;
+                  emailEnvolope.to = combineMailbox(attrs.envelope.to);
+                  emailEnvolope.cc = combineMailbox(attrs.envelope.cc);
+                  emailEnvolope.bcc = combineMailbox(attrs.envelope.bcc);
+                  emailEnvolope.subject = attrs.envelope.subject;
                   emailEnvolope.uid = attrs.uid;
                 });
                 msg.once('end', () => {
@@ -239,16 +252,19 @@ router.get('/', function (req, res, next) {
               });
               f.once('end', () => {
                 console.log('Done fetching all messages!');
-                Promise.race([Promise.all(promises), new Promise(resolve => {
-                  let timer = setTimeout(() => {
-                    resolve();
-                    clearTimeout(timer);
-                  }, 30 * 1000);
-                })]).then(() => {
-                  res.json({msg: msgs.sort((a, b) => {
-                    return a.seq < b.seq;
-                  })});
-                });
+                // Promise.race([Promise.all(promises), new Promise(resolve => {
+                //   let timer = setTimeout(() => {
+                //     resolve();
+                //     clearTimeout(timer);
+                //   }, 30 * 1000);
+                // })]).then(() => {
+                //   res.json({msg: msgs.sort((a, b) => {
+                //     return a.seq < b.seq;
+                //   })});
+                // });
+                res.json({msg: msgs.sort((a, b) => {
+                  return b.seq - a.seq;
+                })});
                 imap.end();
               });
             }
@@ -309,8 +325,41 @@ router.post('/', function (req, res, next) {
   // });
   
 });
-router.put('/', function (req, res, next) {
-
+router.post('/:uid/position', function (req, res, next) {
+  let uid = req.params.uid;
+  let originMailbox = req.query.from;
+  let distMailbox = req.query.to;
+  if (uid && originMailbox && distMailbox) {
+    uid = parseInt(uid);
+    imap.once('ready', () => {
+      imap.openBox(originMailbox, false, (err, box) => {
+        if (err) {
+          res.statusCode = 500;
+          res.json({msg: err.message});
+          return ;
+        }
+        imap.move([uid], distMailbox, err => {
+          if (err) {
+            res.statusCode = 500;
+            res.json({msg: err.message});
+            return ;
+          }
+          res.statusCode = 201;
+          res.end();
+        });
+      });
+    });
+    imap.once('error', err => {
+      res.statusCode = 500;
+      res.json({msg: err.message});
+    });
+    imap.connect();
+  } else {
+    res.statusCode = 400;
+    res.json({
+      msg: 'uid, from, to should not be empty'
+    });
+  }
 });
 router.delete('/:uid', function (req, res, next) {
   let uid = req.params.uid;
@@ -343,7 +392,7 @@ router.delete('/:uid', function (req, res, next) {
   } else {
     res.statusCode = 400;
     res.json({
-      msg: 'uid should not be empty'
+      msg: 'uid, mailbox should not be empty'
     });
   }
 });
